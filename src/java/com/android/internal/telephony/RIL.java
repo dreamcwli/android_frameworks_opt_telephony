@@ -894,8 +894,12 @@ public final class RIL extends BaseCommands implements CommandsInterface {
     getIMSIForApp(String aid, Message result) {
         RILRequest rr = RILRequest.obtain(RIL_REQUEST_GET_IMSI, result);
 
-        rr.mp.writeInt(1);
-        rr.mp.writeString(aid);
+        if (needsOldRilFeature("writeaidonly")) {
+            rr.mp.writeString(aid);
+        } else {
+            rr.mp.writeInt(1);
+            rr.mp.writeString(aid);
+        }
 
         if (RILJ_LOGD) riljLog(rr.serialString() +
                               "> getIMSI: " + requestToString(rr.mRequest)
@@ -2643,6 +2647,11 @@ public final class RIL extends BaseCommands implements CommandsInterface {
             case RIL_UNSOL_DATA_CALL_LIST_CHANGED:
                 if (RILJ_LOGD) unsljLogRet(response, ret);
 
+                if (needsOldRilFeature("skipbrokendatacall")
+                        && "IP".equals(((ArrayList<DataCallState>)ret).get(0).type)) {
+                    break;
+                }
+
                 mDataNetworkStateRegistrants.notifyRegistrants(new AsyncResult(null, ret, null));
             break;
 
@@ -3893,5 +3902,15 @@ public final class RIL extends BaseCommands implements CommandsInterface {
         }
         pw.println(" mLastNITZTimeInfo=" + mLastNITZTimeInfo);
         pw.println(" mTestingEmergencyCall=" + mTestingEmergencyCall.get());
+    }
+
+    private boolean needsOldRilFeature(String feature) {
+        String[] features = SystemProperties.get("ro.telephony.ril.v3", "").split(",");
+        for (String found : features) {
+            if (found.equals(feature)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
